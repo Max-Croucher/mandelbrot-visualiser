@@ -261,5 +261,16 @@ int main(int argc, char *argv[]) {
     init_dir();
     printf("Generating tile maps with zoom level %d using %d threads. Target resolution: %.0fx%.0f pixels\n", max_zoom, num_threads, IMAGE_SIZE * pow(2, max_zoom), IMAGE_SIZE * pow(2, max_zoom));
     worker_dispatch(num_threads);
+
+    // write params file for leaflet
+    char param_filename[256];
+    sprintf(param_filename, "%s/params.js", dirname);
+    FILE* param_file = fopen(param_filename, "w");
+    if (param_file == NULL) {
+        fprintf(stderr, "Unable to write parameter file\n");
+        return EXIT_FAILURE;
+    }
+    fprintf(param_file, "const max_zoom = %d;\nconst image_size = %d;\n", max_zoom, IMAGE_SIZE);
+    fclose(param_file);
     return EXIT_SUCCESS;
 }

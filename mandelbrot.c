@@ -55,7 +55,7 @@ static int mandelbrot_point(long double c_r, long double c_i) {
 
 static png_byte* mandelbrot_row(png_structp png_ptr, long double start_x, long double y, long double range) {
     /* render a slice of the mandelbrot set between (start_x, y) and (start_x+range, y) */
-    png_byte* row = png_calloc(png_ptr, IMAGE_BYTES);
+    png_byte* row = png_malloc(png_ptr, IMAGE_BYTES);
     for (unsigned int x = 0; x < IMAGE_SIZE; x++) {
         row[x] = mandelbrot_point(start_x+(range/IMAGE_SIZE*x), y);
     }
@@ -112,7 +112,8 @@ static void render_tile(char* filename, long double start_x, long double start_y
     for (unsigned int y = 0; y < IMAGE_SIZE; y++) {
         png_free(png_ptr, row_pointers[y]);
     }
-    png_free(png_ptr, row_pointers);
+    free(row_pointers); // png_free doesn't correctly free memory
+    png_destroy_write_struct(&png_ptr, &png_info);
     fclose(png_file);
 }
 

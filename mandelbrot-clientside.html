@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>  
+<head>
+    <title>Mandelbrot Set</title>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.0.1/dist/leaflet.css" />
+    <style>
+        body {
+            padding: 0;
+            margin: 0;
+        }
+        html, body, #map {
+            margin: auto;
+            height: 100%;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script src="https://unpkg.com/leaflet@1.0.1/dist/leaflet.js"></script>
+    <script>
+// global constants
+const MIN_X = -2.0;
+const MIN_Y = -1.25;
+const BASE_RANGE_X = 2.5;
+const BASE_RANGE_Y = 2.5;
+
+const MAX_ITERATIONS = 256;
+const MANDELBROT_BOUND = 2;
+
+function mandelbrot(c_r, c_i) {
+    /* Counts the number of iterations required (up to MAX_ITERATIONS) for the equation
+    z_(i+1) = z_i^2 + c to become unbounded, where c is the complex number (c_r,c_i).
+    Returns -1 if this does not happen */
+    var z_r = 0;
+    var z_i = 0;
+    for (let i = 0; i < MAX_ITERATIONS; i++) {
+        let x_r = (z_r ** 2) - (z_i ** 2);
+        let x_i = 2 * z_r * z_i;
+        z_r = x_r + c_r;
+        z_i = x_i + c_i;
+        if (Math.sqrt(z_r**2 + z_i**2) > MANDELBROT_BOUND) return i;
+    }
+    return -1;
+}
+
+function write_buffer(coords, size) {
+    /* take a tile identifier in Leaflet coordinate space and return an RGBA pixel
+    buffer for the image to be rendered for this tile */
+    var start = performance.now();
+    var buffer = new Uint8ClampedArray(size.x * size.y * 4);
+    var start_x = MIN_X + (BASE_RANGE_X / (2 ** coords.z)) * coords.x;
+    var start_y = MIN_Y + (BASE_RANGE_Y / (2 ** coords.z)) * coords.y;
+    var step_x = BASE_RANGE_X / (2 ** coords.z) / size.x;
+    var step_y = BASE_RANGE_X / (2 ** coords.z) / size.y;
+    for (let x_index = 0; x_index < size.x; x_index++) {
+        for (let y_index = 0; y_index < size.y; y_index++) {
+            let x = start_x + step_x * x_index;
+            let y = start_y + step_y * y_index;
+            let col = mandelbrot(x, y);
+            let pos = (y_index * size.x + x_index) * 4; 
+            if (col == -1) { // black
+                buffer[pos  ] = 0;
+                buffer[pos+1] = 0;
+                buffer[pos+2] = 0;
+            } else if (col < 16) { // transition blue to magenta with 1/16 of the colour range
+                buffer[pos  ] = col*16;
+                buffer[pos+1] = 0;
+                buffer[pos+2] = 255;
+            } else if (col < 64) { // transition magenta to red with 3/16 of the colour range
+                buffer[pos  ] = 255;
+                buffer[pos+1] = 0;
+                buffer[pos+2] = 255-((col-16)/3*16);
+            } else { // transition red to yellow with 12/16 of the colour range
+                buffer[pos  ] = 255;
+                buffer[pos+1] = (col-64)/3*4;
+                buffer[pos+2] = 0;
+            }
+            buffer[pos+3] = 255;
+        }
+    }
+    return buffer;
+}
+
+// Set up a Leaflet instance
+var map = new L.Map('map', {
+    center: [-128,128],
+    zoom: 2,
+    minZoom: 2,
+    maxZoom: 25,
+    zoomSnap: 0.25,
+    wheelPxPerZoomLevel: 15,
+    updateWhenZooming: false,
+    maxBounds: [[-256,0],[0, 256]],
+    crs: L.CRS.Simple
+});
+var tiles = new L.GridLayer();
+
+// function to dynamically generate tiles
+tiles.createTile = function(coords) {
+    // initialise a canvas element
+    var tile = L.DomUtil.create('canvas', 'leaflet-tile');
+    var ctx = tile.getContext('2d');
+    var size = this.getTileSize();
+    tile.width = size.x;
+    tile.height = size.y;
+
+    // create image buffer
+    var idata = ctx.createImageData(size.x, size.y);
+    idata.data.set(write_buffer(coords, size));
+    ctx.putImageData(idata, 0, 0);
+    
+    return tile;
+}
+tiles.addTo(map)
+
+// onclick popup
+var popup = L.popup();
+function onMapClick(e) {
+    // coordinates must be converted from [0,256],[0,256] to the correct coordinate space
+    var x = e.latlng.lng / 256 * BASE_RANGE_X + MIN_X;
+    var y = -e.latlng.lat / 256 * BASE_RANGE_Y + MIN_Y;
+    popup
+        .setLatLng(e.latlng)
+        .setContent(x.toFixed(8)+" " + (y>0 ? '-' : '+') + " "+ Math.abs(y).toFixed(8)+"i")
+        .openOn(map);
+}
+
+map.on('click', onMapClick);
+
+    </script>
+</body>
+</html>
